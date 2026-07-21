@@ -1,0 +1,52 @@
+name = "plaintext-site"
+main = "src/index.js"
+compatibility_date = "2026-07-01"
+workers_dev = false
+
+# Own Worker on the numetal zone, same pattern as the other subdomain sites.
+# Deploy with `npx wrangler deploy` from this directory.
+routes = [{pattern = "plaintext.numetal.xyz", custom_domain = true}]
+
+[observability]
+enabled = true
+
+[vars]
+CHAIN_ID = "4663"
+RPC_URL = "https://rpc.mainnet.chain.robinhood.com"
+EXPLORER = "https://robinhoodchain.blockscout.com"
+IPFS_GATEWAY = "https://gateway.pinata.cloud"
+PRIVY_APP_ID = "cmrtnyo1h00950cl8ksgyg0bs"  # public, client-side
+# LIVE v3 on 4663 (adds rename()) — deployed + verified 2026-07-20.
+# v1/v2 superseded (empty, no data). tx: broadcast/Deploy.s.sol/4663/run-latest.json
+CONTRACT = "0xC4bfCb7c103Ad4571D98b5F5bC9bc7b860023f5c"
+DEPLOY_BLOCK = "15036412"
+# CONTRACT (above) is the WRITE target — /join posts + replies go here.
+# CONTRACTS is every version the board READS, oldest first. Adding a version here
+# is how the board evolves WITHOUT nuking old posts: the old contract keeps being
+# indexed. v2 holds the founder's first notices; v3 adds rename() for new writes.
+CONTRACTS = '[{"a":"0x4De10ff50c6886e41ed3f33eB3358dcd714AdBc1","b":14870317},{"a":"0xC4bfCb7c103Ad4571D98b5F5bC9bc7b860023f5c","b":15036412}]'
+
+# Secrets (never in this file — `npx wrangler secret put <NAME>`):
+#   PINATA_JWT
+
+# The public 4663 RPC disables eth_subscribe/eth_newFilter, so the indexer polls.
+# Every 2 minutes is far below any rate limit we observed and keeps the board
+# feeling current without pretending to be realtime.
+[triggers]
+crons = ["*/2 * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "plaintext"
+# Fill from `npx wrangler d1 create plaintext`.
+database_id = "da0a9bf0-882e-4a06-9f72-97955d5b84c1"
+
+[[r2_buckets]]
+binding = "BODIES"
+bucket_name = "plaintext-bodies"
+
+[assets]
+directory = "./public-assets"
+binding = "ASSETS"
+html_handling = "none"
+not_found_handling = "none"

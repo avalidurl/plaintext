@@ -1,0 +1,21 @@
+/* Matches the board: UA serif, one column, tiny palette. No webfont. */
+body{margin:0;color:#16181D;background:#fff;font-family:serif}
+.wrap{max-width:600px;margin:0 auto;padding:8px}
+h1{color:#1F437E}
+a{color:#2D5FB6}
+a:visited{color:#7B4499}
+.t{color:#4A5568}
+.warn{background:#DDF0FE;padding:.5rem}
+button{font:inherit;padding:.3rem .7rem;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+input,textarea{font:inherit;background:#fff;color:inherit;box-sizing:border-box}
+textarea{width:100%;padding:.5rem}
+input{padding:.25rem}
+#status{min-height:1.4em;color:#1F437E}
+.b{border-top:1px solid #B8DCF6;margin:1rem 0}
+@media(prefers-color-scheme:dark){
+  body{background:#14161B;color:#E8E8E8}
+  h1,a{color:#64ABF6}a:visited{color:#C79BE0}.t{color:#9AA5B8}
+  .warn{background:#1B2430}input,textarea{background:#20242E}
+  .b{border-top-color:#2A3140}#status{color:#64ABF6}
+}

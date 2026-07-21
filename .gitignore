@@ -1,0 +1,27 @@
+# Compiler files
+cache/
+out/
+
+# Ignores development broadcast logs
+!/broadcast
+/broadcast/*/31337/
+/broadcast/**/dry-run/
+
+# Docs
+docs/
+
+# Dotenv file
+.env
+.env.*
+
+# Node
+node_modules/
+
+# Wrangler local state (local D1 sqlite, CF account cache)
+.wrangler/
+
+# Vite build intermediate — the deployed copy lives in site/public-assets/join/
+dist/
+
+# OS cruft
+.DS_Store
