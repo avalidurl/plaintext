@@ -35,10 +35,18 @@ ${body}
 
 export const masthead = () => `<pre>${esc(MASTHEAD)}</pre>`;
 
-export const nav = () => `<p class="t"><a href="/">the board</a> &middot; <a href="/hands">hands</a> &middot; <a href="/me">profile</a> &middot; <a href="/manual">manual</a> &middot; <a href="/join">enter</a></p>`;
+export const nav = () => `<p class="t"><a href="/">the board</a> &middot; <a href="/hands">hands</a> &middot; <a href="/me">profile</a> &middot; <a href="/manual">manual</a> &middot; <a href="/join">write</a></p>`;
 
 export const foot = () =>
-    `<div class="b"></div><p class="t"><a href="/me">profile</a> &middot; <a href="/join">enter</a> &middot; <a href="/hands">hands</a> &middot; <a href="/manual">manual</a> &middot; <a href="/spec">spec</a> &middot; <a href="/feed.xml">feed</a> &middot; every notice is a token on chain 4663</p>`;
+    `<div class="b"></div><p class="t"><a href="/me">profile</a> &middot; <a href="/join">write</a> &middot; <a href="/hands">hands</a> &middot; <a href="/manual">manual</a> &middot; <a href="/spec">spec</a> &middot; <a href="/feed.xml">feed</a> &middot; every notice is a token on chain 4663</p>`;
+
+/**
+ * The one loud affordance on an otherwise quiet board. It is a plain <a> — the
+ * read pages ship no JavaScript, so the button leads to /join (the only page
+ * that carries the wallet code) rather than trying to be the write box itself.
+ */
+export const writeBtn = (label = "write a notice", href = "/join") =>
+    `<p><a class="btn" href="${esc(href)}">${esc(label)}</a></p>`;
 
 const pad = (n) => String(n).padStart(2, "0");
 export function stamp(unix) {

@@ -11,6 +11,7 @@ import {
     html,
     stripSubject,
     extractWikilinks,
+    writeBtn,
 } from "./render.js";
 import {sync, hydrate} from "./chain.js";
 import {cidForText} from "./cid.js";
@@ -116,6 +117,8 @@ async function index(env, url) {
 <p>A board of plain text. There is one box and it takes markdown or nothing at all.
 You write, it costs you something, and what you wrote stays where you put it.</p>
 <p>Nothing here is free and nothing here is loud. Reading costs nothing at all.</p>
+${writeBtn()}
+<p class="t">~$3 a notice. Sign in with X, an email or a wallet, pick which of your wallets pays, publish.</p>
 ${nav()}
 <div class="b"></div>
 <p class="t">latest notices</p>
@@ -173,8 +176,8 @@ async function notice(env, gid) {
         ? ` &middot; <a href="/join?reply=${n.token_id}">leave a remark — ~$0.50</a>`
         : "";
     const replyFoot = canReply
-        ? `<p class="t"><a href="/join?reply=${n.token_id}">Leave a remark</a> under this notice.</p>`
-        : `<p class="t">This notice is from an earlier version of the board — its text stays here forever, but new remarks open on the current board.</p>`;
+        ? `${writeBtn("leave a remark", `/join?reply=${n.token_id}`)}<p class="t">~$0.50, published from whichever of your wallets you pick.</p>`
+        : `<p class="t">This notice is from an earlier version of the board — its text stays here forever, but new remarks open on the current board.</p>${writeBtn()}`;
 
     return page({
         title: n.title || `notice ${n.gid}`,
@@ -257,6 +260,7 @@ async function handPage(env, name, own = false) {
 <p class="t">${h.chosen ? "chose this name" : "was dealt this name"} &middot; here since ${esc(
             stamp(h.entered_at),
         )}${own ? ' &middot; <a href="/join#profile">edit your page</a>' : ""}</p>
+${own ? writeBtn() : ""}
 ${own && !bioHtml && !socialHtml ? '<p class="t">Your page is bare. <a href="/join#profile">Add a bio and links</a>, change your name, or write your first notice.</p>' : ""}
 ${bioHtml}
 ${socialHtml}

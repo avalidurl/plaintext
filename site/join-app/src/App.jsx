@@ -1,10 +1,19 @@
 import React, {useEffect, useState, useCallback} from "react";
-import {usePrivy, useWallets, useSendTransaction, useLinkAccount} from "@privy-io/react-auth";
+import {usePrivy, useWallets, useSendTransaction, useLinkAccount, useConnectWallet} from "@privy-io/react-auth";
 import {parseEther} from "viem";
-import {read, data, balanceOf, CONTRACT} from "./chain.js";
+import {read, data, balanceOf, CONTRACT, rhChain} from "./chain.js";
 import {normalize, profileMessage} from "./profileMsg.js";
 
 const fmtEth = (wei) => (Number(wei) / 1e18).toFixed(6).replace(/0+$/, "").replace(/\.$/, "");
+const short = (a) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+
+// Privy reports a connected wallet's network CAIP-2 style ("eip155:4663").
+const chainOf = (w) => Number(String(w?.chainId ?? "").split(":").pop());
+
+// "plaintext wallet" for the one we minted; otherwise the wallet's own name
+// (MetaMask, Rabby, …) so a chooser row says something a human recognises.
+const walletLabel = (w) =>
+    w.walletClientType === "privy" ? "plaintext wallet" : w.meta?.name || w.walletClientType || "your wallet";
 
 // Relay deep links, format + "robinhood" slug verified against relay.link's live
 // chains API + deep-linking docs. Privy's own on-ramp can't reach 4663, so Relay
@@ -39,47 +48,57 @@ export default function App() {
     const {wallets} = useWallets();
     const {sendTransaction} = useSendTransaction();
     const {linkEmail} = useLinkAccount();
+    const {connectWallet} = useConnectWallet();
 
     // A user can have more than one wallet — an X/email login mints an embedded
-    // one, and they may also have connected their own (e.g. gokhan.eth). There is
-    // no single right default (the embedded wallet is what a paying user funds;
-    // the connected wallet is what a founder posts free from), so let them choose
-    // which wallet they're acting as. Default to the embedded one when present.
+    // one, and they may also connect their own (e.g. gokhan.eth). There is no
+    // single right default (the embedded wallet is what a paying user funds; the
+    // connected wallet is what a founder posts free from), and each address is a
+    // SEPARATE hand on chain — its own name, its own exemption, its own balance.
+    // So the choice is the user's, and the chooser shows what each one is.
     const [selectedAddr, setSelectedAddr] = useState(null);
     useEffect(() => {
-        if (!selectedAddr && wallets?.length) {
+        if (wallets?.length && !wallets.some((w) => w.address === selectedAddr)) {
             const embedded = wallets.find((w) => w.walletClientType === "privy");
             setSelectedAddr((embedded || wallets[0]).address);
         }
     }, [wallets, selectedAddr]);
     const wallet = wallets?.find((w) => w.address === selectedAddr) || wallets?.[0];
     const address = wallet?.address;
-    const walletLabel = (w) => (w.walletClientType === "privy" ? "plaintext wallet" : "your wallet");
 
-    const [state, setState] = useState(null); // {name, exempt, balance}
+    // Name / exemption / balance PER wallet, so the chooser can label every row
+    // without making you select a wallet just to find out what it is.
+    const [info, setInfo] = useState({}); // {address: {name, exempt, balance}}
     const [status, setStatus] = useState("");
     const [busy, setBusy] = useState(false);
+    const state = address ? info[address] ?? null : null;
+
+    // The draft lives up here, not inside Compose. Switching wallets can swap the
+    // compose box for the door (a wallet that hasn't entered yet), and typed text
+    // must survive that — losing a draft to a click is unforgivable.
+    const [draft, setDraft] = useState("");
 
     const reply = new URLSearchParams(location.search).get("reply");
     const isReply = reply && /^\d+$/.test(reply);
 
-    const refresh = useCallback(async () => {
-        if (!address) return;
+    const load = useCallback(async (addr) => {
         try {
             const [name, exempt, balance] = await Promise.all([
-                read("nameOf", [address]),
-                read("exempt", [address]),
-                balanceOf(address),
+                read("nameOf", [addr]),
+                read("exempt", [addr]),
+                balanceOf(addr),
             ]);
-            setState({name, exempt, balance});
+            setInfo((m) => ({...m, [addr]: {name, exempt, balance}}));
         } catch (e) {
             setStatus("Couldn't read the chain. Retry in a moment.");
         }
-    }, [address]);
+    }, []);
+    const refresh = useCallback(() => (address ? load(address) : undefined), [address, load]);
 
     useEffect(() => {
-        if (authenticated && address) refresh();
-    }, [authenticated, address, refresh]);
+        if (!authenticated) return;
+        for (const w of wallets ?? []) load(w.address);
+    }, [authenticated, wallets, load]);
 
     // Once we know this session's name, drop a cookie so the board's /me button
     // can resolve to /~name server-side (the board itself stays JS-free).
@@ -110,6 +129,13 @@ export default function App() {
     async function send(fnName, args, valueWei, pending) {
         try {
             setBusy(true);
+            // The embedded wallet is pinned to 4663 by defaultChain, but a
+            // connected wallet is on whatever network its extension last used —
+            // sending there would go to the wrong chain. Ask it to switch first.
+            if (wallet && chainOf(wallet) !== rhChain.id) {
+                setStatus("Switch your wallet to Robinhood Chain (4663) to continue…");
+                await wallet.switchChain(rhChain.id);
+            }
             setStatus(pending);
             const tx = {to: CONTRACT, data: data(fnName, args)};
             if (valueWei && valueWei > 0n) tx.value = valueWei;
@@ -122,7 +148,13 @@ export default function App() {
             if (fnName === "post" || fnName === "reply") setTimeout(() => (location.href = "/"), 1500);
         } catch (e) {
             const m = (e && (e.shortMessage || e.message)) || "Transaction failed.";
-            setStatus(/insufficient|funds|exceeds balance/i.test(m) ? "You need ETH on Robinhood Chain to pay for this." : m);
+            if (/insufficient|funds|exceeds balance/i.test(m)) {
+                setStatus("You need ETH on Robinhood Chain to pay for this.");
+            } else if (/chain|network|4663/i.test(m)) {
+                setStatus("This wallet isn't on Robinhood Chain (4663). Approve the network switch, then try again.");
+            } else {
+                setStatus(m);
+            }
         } finally {
             setBusy(false);
         }
@@ -152,7 +184,7 @@ export default function App() {
                         {" · "}
                     </>
                 ) : ""}
-                {address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "provisioning your wallet…"}
+                {address ? short(address) : "provisioning your wallet…"}
                 {address ? <> <Copy text={address} /></> : ""}
                 {wallet ? ` · ${walletLabel(wallet)}` : ""}
                 {state?.exempt ? " · writes free" : ""}
@@ -162,23 +194,13 @@ export default function App() {
                 </a>
             </p>
 
-            {wallets && wallets.length > 1 && (
-                <p className="t">
-                    posting from:{" "}
-                    {wallets.map((w, i) => (
-                        <span key={w.address}>
-                            {i > 0 && " · "}
-                            <a
-                                href="#"
-                                onClick={(e) => (e.preventDefault(), setSelectedAddr(w.address))}
-                                style={{fontWeight: w.address === address ? "bold" : "normal"}}
-                            >
-                                {w.address.slice(0, 6)}…{w.address.slice(-4)} ({walletLabel(w)})
-                            </a>
-                        </span>
-                    ))}
-                </p>
-            )}
+            <WalletPicker
+                wallets={wallets ?? []}
+                selected={address}
+                onSelect={setSelectedAddr}
+                info={info}
+                connectWallet={connectWallet}
+            />
 
             {onlySocial && (
                 <p className="warn">
@@ -204,10 +226,27 @@ export default function App() {
             {!state ? (
                 <p className="t">Reading the chain…</p>
             ) : !state.name ? (
-                <Door state={state} busy={busy} send={send} />
+                <>
+                    {draft.trim() && (
+                        <p className="t">
+                            Your draft is kept — pick a wallet that's already through the door, or take a name with
+                            this one.
+                        </p>
+                    )}
+                    <Door state={state} busy={busy} send={send} />
+                </>
             ) : (
                 <>
-                    <Compose name={state.name} exempt={state.exempt} isReply={isReply} reply={reply} busy={busy} send={send} />
+                    <Compose
+                        name={state.name}
+                        exempt={state.exempt}
+                        isReply={isReply}
+                        reply={reply}
+                        busy={busy}
+                        send={send}
+                        body={draft}
+                        setBody={setDraft}
+                    />
                     {!isReply && (
                         <>
                             <div className="b" />
@@ -227,6 +266,48 @@ export default function App() {
             )}
 
             <p id="status">{status}</p>
+        </>
+    );
+}
+
+/**
+ * Which wallet publishes. Always visible, even with one wallet — the board
+ * charges real money to a real address, so which address is paying should never
+ * be something you have to guess. Each row states what that wallet IS on chain:
+ * its hand name (or that it hasn't been through the door), and what it can pay.
+ */
+function WalletPicker({wallets, selected, onSelect, info, connectWallet}) {
+    if (!wallets.length) return <p className="t">Provisioning your wallet…</p>;
+    return (
+        <>
+            <p className="t">publishing from</p>
+            {wallets.map((w) => {
+                const i = info[w.address];
+                const on = w.address === selected;
+                return (
+                    <div key={w.address} className={on ? "p" : undefined} style={{padding: ".4rem .5rem"}}>
+                        <label style={{cursor: "pointer"}}>
+                            <input type="radio" name="wallet" checked={on} onChange={() => onSelect(w.address)} />{" "}
+                            <b>{walletLabel(w)}</b> · {short(w.address)}
+                            <br />
+                            <span className="t">
+                                {!i
+                                    ? "reading the chain…"
+                                    : `${i.name ? `~${i.name}` : "no name yet — the door first"} · ${
+                                          i.exempt ? "writes free" : `${fmtEth(i.balance)} ETH`
+                                      }`}
+                            </span>
+                        </label>{" "}
+                        <Copy text={w.address} />
+                    </div>
+                );
+            })}
+            <p className="t">
+                <a href="#" onClick={(e) => (e.preventDefault(), connectWallet())}>
+                    connect another wallet
+                </a>{" "}
+                · every wallet is its own hand here — its own name, its own notices.
+            </p>
         </>
     );
 }
@@ -446,8 +527,7 @@ function RenameBox({exempt, busy, send}) {
     );
 }
 
-function Compose({name, exempt, isReply, reply, busy, send}) {
-    const [body, setBody] = useState("");
+function Compose({name, exempt, isReply, reply, busy, send, body, setBody}) {
     const [price, setPrice] = useState(null);
     useEffect(() => {
         (async () => setPrice(exempt ? 0n : await read(isReply ? "remarkWei" : "noticeWei")))();

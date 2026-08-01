@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --port 8787",
+    "join:build": "cd join-app && npm run build && cd .. && rm -rf public-assets/join && mkdir -p public-assets/join && rsync -a --exclude index.html join-app/dist/ public-assets/join/",
     "deploy": "wrangler deploy",
     "db:local": "wrangler d1 execute plaintext --local --file=schema.sql",
     "db:remote": "wrangler d1 execute plaintext --remote --file=schema.sql"
