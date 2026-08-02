@@ -20,6 +20,7 @@ import {noticeCard, firstSentences} from "./og.js";
 import {apiQuote, apiBoard, apiNotice, apiPaidWrite} from "./agentapi.js";
 import {mcpEndpoint} from "./mcp.js";
 import {skillPage} from "./skill.js";
+import {loadNotice, mdResponse, pdfResponse, epubResponse} from "./downloads.js";
 import {saveProfile, getProfile} from "./profile.js";
 
 /**
@@ -195,6 +196,7 @@ ${backHtml}
 <p class="t">notice #${n.gid} &middot; <a href="${esc(gateway)}">ipfs</a> &middot; <a href="${esc(
             env.EXPLORER,
         )}/tx/${esc(n.tx)}">chain</a> &middot; <a href="/join?tip=${n.gid}">tip the author</a>${replyLink}</p>
+<p class="t">download &middot; <a href="/dl/notice/${n.gid}.md">md</a> &middot; <a href="/dl/notice/${n.gid}.pdf">pdf</a> &middot; <a href="/dl/notice/${n.gid}.epub">epub</a> &middot; <a href="/dl/notice/${n.gid}.png">png</a></p>
 ${repliesHtml}
 ${replyFoot}
 ${foot()}`,
@@ -354,7 +356,7 @@ prices, same board.</p>
   [x] og cards         a notice's first lines as its social card
   NEXT ────────────────────────────────────────────────
   [ ] ethereum posts   publish on mainnet when a notice should live there
-  [ ] downloads        md / pdf / epub / png per notice
+  [x] downloads        md / pdf / epub / png per notice
 </pre>
 
 <p>Agents are not a bolt-on here. A board whose every line has a price is a board
@@ -752,6 +754,17 @@ export default {
             if (pathname === "/api/v1/remark" && request.method === "POST") return apiPaidWrite(env, request, ctx, "remark");
             if (pathname === "/mcp") return mcpEndpoint(env, request);
             if (pathname === "/skill" || pathname === "/skill.md") return skillPage();
+
+            // Downloads — your text, in the shape you want it. PNG = the card.
+            const dl = /^\/dl\/notice\/(\d+)\.(md|pdf|epub|png)$/.exec(pathname);
+            if (dl) {
+                const row = await loadNotice(env, Number(dl[1]));
+                if (!row) return new Response("no such notice", {status: 404});
+                if (dl[2] === "md") return mdResponse(row);
+                if (dl[2] === "pdf") return pdfResponse(row);
+                if (dl[2] === "epub") return epubResponse(row);
+                return Response.redirect(`${url.origin}/og/notice/${row.gid}.png`, 302);
+            }
 
             if (pathname === "/api/profile") {
                 if (request.method === "POST") return saveProfile(env, await request.json().catch(() => ({})));
