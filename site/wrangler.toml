@@ -16,16 +16,19 @@ RPC_URL = "https://rpc.mainnet.chain.robinhood.com"
 EXPLORER = "https://robinhoodchain.blockscout.com"
 IPFS_GATEWAY = "https://gateway.pinata.cloud"
 PRIVY_APP_ID = "cmrtnyo1h00950cl8ksgyg0bs"  # public, client-side
-# LIVE v3 on 4663 (adds rename()) — deployed + verified 2026-07-20.
-# v1/v2 superseded (empty, no data). tx: broadcast/Deploy.s.sol/4663/run-latest.json
-CONTRACT = "0xC4bfCb7c103Ad4571D98b5F5bC9bc7b860023f5c"
-DEPLOY_BLOCK = "15036412"
+# LIVE posts-only contract on 4663 (no door, no name-gate — identity is the
+# Ethereum name NFT). Deployed + Blockscout-verified 2026-08-02, block 25488071.
+CONTRACT = "0xc9DA0423D4d2245d71c550B8314224119aEcbf99"
+DEPLOY_BLOCK = "25488071"
 # CONTRACT (above) is the RH WRITE target — /join posts + replies go here.
 # CONTRACTS is every contract the board READS, oldest first, ACROSS CHAINS ("r" =
 # rpc override; no "r" = Robinhood). Adding an entry is how the board evolves
 # WITHOUT nuking old posts. v2 holds the founder's first notices; v3 was the last
 # combined contract; the Ethereum entry is the NAMES NFT (identity source of truth).
-CONTRACTS = '[{"a":"0x4De10ff50c6886e41ed3f33eB3358dcd714AdBc1","b":14870317},{"a":"0xC4bfCb7c103Ad4571D98b5F5bC9bc7b860023f5c","b":15036412},{"a":"0xe15a6ea3dd93af1d8a1c1c27f487a44578a89e8b","b":25663360,"r":"https://ethereum-rpc.publicnode.com"}]'
+CONTRACTS = '[{"a":"0x4De10ff50c6886e41ed3f33eB3358dcd714AdBc1","b":14870317},{"a":"0xC4bfCb7c103Ad4571D98b5F5bC9bc7b860023f5c","b":15036412},{"a":"0xe15a6ea3dd93af1d8a1c1c27f487a44578a89e8b","b":25663360,"r":"https://eth.drpc.org"},{"a":"0xc9DA0423D4d2245d71c550B8314224119aEcbf99","b":25488071}]'
+# ⚠️ ETH indexer rpc must serve eth_getLogs on the free tier: publicnode gates it
+# behind a token ("archive request"), drpc serves it. join-app READS (eth_call)
+# stay on publicnode — that method is open there and it's already in the /join CSP.
 
 # Secrets (never in this file — `npx wrangler secret put <NAME>`):
 #   PINATA_JWT

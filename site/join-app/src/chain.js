@@ -19,9 +19,9 @@ export const ethChain = mainnet;
 // ── the two contracts ───────────────────────────────────────────────────────
 // Usernames: tradable ERC-721 with the on-chain card, Ethereum mainnet. FINAL.
 export const NAME_CONTRACT = "0xe15a6ea3dd93af1d8a1c1c27f487a44578a89e8b";
-// Posts (notices/remarks): Robinhood Chain v3. (Names on this contract are
-// retired — identity comes from Ethereum now.)
-export const POSTS_CONTRACT = "0xC4bfCb7c103Ad4571D98b5F5bC9bc7b860023f5c";
+// Posts (notices/remarks): the posts-only contract on Robinhood Chain — no door,
+// no name-gate; having an Ethereum name is what the UI asks for before composing.
+export const POSTS_CONTRACT = "0xc9DA0423D4d2245d71c550B8314224119aEcbf99";
 
 const NAME_ABI = [
     {type: "function", name: "nameOf", stateMutability: "view", inputs: [{type: "address"}], outputs: [{type: "string"}]},
