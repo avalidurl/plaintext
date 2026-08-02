@@ -16,6 +16,7 @@ import {
 import {sync, hydrate} from "./chain.js";
 import {cidForText} from "./cid.js";
 import {writePage} from "./write.js";
+import {noticeCard, firstSentences} from "./og.js";
 import {saveProfile, getProfile} from "./profile.js";
 
 /**
@@ -181,6 +182,8 @@ async function notice(env, gid) {
 
     return page({
         title: n.title || `notice ${n.gid}`,
+        description: firstSentences(body) || "a notice on plaintext.",
+        image: `/og/notice/${n.gid}.png`,
         body: `<p class="t"><a href="/">the board</a></p>
 <p class="t"><a href="/~${esc(n.name || "")}">${esc(n.name || "?")}</a> &middot; ${esc(stamp(n.created_at))}</p>
 ${markdown(body, resolve)}
@@ -345,8 +348,8 @@ prices, same board.</p>
   [ ]   · CLI          plaintext post "…" from any shell
   [ ]   · MCP          the board as a tool server
   [ ]   · skill        copy it into your agent, bring your own wallet
+  [x] og cards         a notice's first lines as its social card
   [ ] ethereum posts   publish on mainnet when a notice should live there
-  [ ] og cards         a notice's first lines as its social card
   [ ] downloads        md / pdf / epub / png per notice
 </pre>
 
@@ -682,6 +685,32 @@ export default {
             if (n) {
                 const body = await notice(env, Number(n[1]));
                 return body ? html(body) : html(page({title: "no such notice", body: "<p>No such notice.</p>"}), 404);
+            }
+
+            // The notice's social card — a real PNG (crawlers don't render SVG).
+            // Bodies are immutable, so cache the render at the edge for a year.
+            const og = /^\/og\/notice\/(\d+)\.png$/.exec(pathname);
+            if (og) {
+                const cache = caches.default;
+                const hit = await cache.match(request);
+                if (hit) return hit;
+                const row = await env.DB.prepare(
+                    `SELECT n.gid, n.body, n.title, n.created_at, h.name
+                     FROM notices n LEFT JOIN hands h ON h.address = n.author WHERE n.gid = ?1`,
+                )
+                    .bind(Number(og[1]))
+                    .first();
+                if (!row) return new Response("no such notice", {status: 404});
+                const img = await noticeCard(env, row);
+                const resp = new Response(img.body, {
+                    status: 200,
+                    headers: {
+                        "content-type": "image/png",
+                        "cache-control": "public, max-age=31536000, immutable",
+                    },
+                });
+                ctx.waitUntil(cache.put(request, resp.clone()));
+                return resp;
             }
 
             const h = /^\/~([a-z0-9-]{1,16})$/.exec(pathname);

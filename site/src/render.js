@@ -10,7 +10,10 @@ export const esc = (s) =>
 const ORIGIN = "https://plaintext.numetal.xyz";
 const TAGLINE = "a board of plain text. one box, markdown or nothing, a price on every line.";
 
-export function page({title, body, head = "", description = TAGLINE}) {
+export function page({title, body, head = "", description = TAGLINE, image = "/og.png"}) {
+    // Per-page social card: notices pass their own /og/notice/<gid>.png; everything
+    // else keeps the site card. Crawlers need an absolute URL.
+    const img = /^https?:/.test(image) ? image : ORIGIN + image;
     return `<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8">
@@ -21,10 +24,10 @@ export function page({title, body, head = "", description = TAGLINE}) {
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta property="og:title" content="${esc(title)}">
 <meta property="og:description" content="${esc(description)}">
-<meta property="og:image" content="${ORIGIN}/og.png">
+<meta property="og:image" content="${esc(img)}">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="${ORIGIN}/og.png">
+<meta name="twitter:image" content="${esc(img)}">
 <link rel="stylesheet" href="/style.css">
 <link rel="alternate" type="application/atom+xml" href="/feed.xml">
 ${head}

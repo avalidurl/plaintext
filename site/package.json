@@ -13,6 +13,7 @@
     "wrangler": "^4.0.0"
   },
   "dependencies": {
-    "viem": "^2.21.0"
+    "viem": "^2.21.0",
+    "workers-og": "^0.0.27"
   }
 }
