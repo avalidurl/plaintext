@@ -31,10 +31,12 @@ export const TOPICS = {
 };
 
 async function rpcCall(url, method, params) {
+    // Time-boxed: a throttled/hanging RPC must fail fast, not eat the whole tick.
     const r = await fetch(url, {
         method: "POST",
         headers: {"content-type": "application/json"},
         body: JSON.stringify({jsonrpc: "2.0", id: 1, method, params}),
+        signal: AbortSignal.timeout(8000),
     });
     if (!r.ok) throw new Error(`rpc ${method} http ${r.status}`);
     const j = await r.json();
@@ -91,17 +93,42 @@ function contractList(env) {
     return [];
 }
 
-/** Pull new logs from every indexed contract (each on its own chain) into D1. */
+/**
+ * Pull new logs from every indexed contract (each on its own chain) into D1.
+ * Per-contract FAILURE ISOLATION: one throttled RPC or bad range must never
+ * starve the contracts after it in the list — each failure is reported and the
+ * loop moves on. (Learned live: a rate-limited ETH RPC silently froze every
+ * cursor that came after it, and new posts stopped appearing on the board.)
+ */
 export async function sync(env, {maxBlocks = 500_000} = {}) {
     const contracts = contractList(env);
     if (!contracts.length) return {skipped: "no contracts"};
-    // Heads differ per chain, so resolve one per distinct RPC.
+    // Heads differ per chain, so resolve one per distinct RPC. A dead RPC marks
+    // its contracts skipped for this tick — the next tick retries.
     const heads = new Map();
     for (const c of contracts) {
-        if (!heads.has(c.rpc)) heads.set(c.rpc, hexToInt(await rpcCall(c.rpc, "eth_blockNumber", [])));
+        if (heads.has(c.rpc)) continue;
+        try {
+            heads.set(c.rpc, hexToInt(await rpcCall(c.rpc, "eth_blockNumber", [])));
+        } catch (err) {
+            heads.set(c.rpc, null);
+            console.error("sync head failed", c.rpc, err?.message);
+        }
     }
     const results = [];
-    for (const c of contracts) results.push(await syncContract(env, c, heads.get(c.rpc), maxBlocks));
+    for (const c of contracts) {
+        const head = heads.get(c.rpc);
+        if (head == null) {
+            results.push({address: c.address, skipped: "rpc head unavailable"});
+            continue;
+        }
+        try {
+            results.push(await syncContract(env, c, head, maxBlocks));
+        } catch (err) {
+            results.push({address: c.address, error: err?.message ?? String(err)});
+            console.error("sync contract failed", c.address, err?.message);
+        }
+    }
     return {contracts: results};
 }
 
