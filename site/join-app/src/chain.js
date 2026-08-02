@@ -1,11 +1,36 @@
 import {defineChain, createPublicClient, http, encodeFunctionData} from "viem";
-import {mainnet} from "viem/chains";
+import {mainnet, base} from "viem/chains";
 
 // ── the two chains ──────────────────────────────────────────────────────────
 // Names are ETHEREUM-ONLY: the username NFT lives on mainnet. Posts settle on
 // Robinhood Chain (cheap) — an Ethereum option for posts arrives with the new
 // posts contract. Chain 4663 isn't in viem/chains, so define it; values match
 // the live chain (chainId 0x1237, ETH gas, Blockscout explorer).
+export const baseChain = base;
+
+// ── tipping ─────────────────────────────────────────────────────────────────
+// A tip is money to the AUTHOR, not to the board. ETH on Robinhood goes through
+// the posts contract's tip(tokenId) (100% forwarded, and the board tallies it);
+// every other option is a plain transfer straight to the author's address on the
+// token's own chain. All addresses + decimals verified on-chain 2026-08-02.
+export const TIP_OPTIONS = [
+    {id: "eth-rh", label: "ETH · robinhood", kind: "contract-tip", chainId: 4663, decimals: 18},
+    {id: "eth-eth", label: "ETH · ethereum", kind: "native", chainId: 1, decimals: 18},
+    {id: "text", label: "$TEXT · ethereum", kind: "erc20", chainId: 1, token: "0xCa21e280D610eEae6f74eC9D71F08B8c5fEdFB07", decimals: 18},
+    {id: "usdc", label: "USDC · ethereum", kind: "erc20", chainId: 1, token: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", decimals: 6},
+    {id: "usdt", label: "USDT · ethereum", kind: "erc20", chainId: 1, token: "0xdAC17F958D2ee523a2206206994597C13D831ec7", decimals: 6},
+    {id: "numetal", label: "NUMETAL · base", kind: "erc20", chainId: 8453, token: "0x57EDb7FC54ADa9Ef4E113DC05A168449e63cFbA3", decimals: 18},
+];
+
+const ERC20_ABI = [
+    {type: "function", name: "transfer", stateMutability: "nonpayable", inputs: [{type: "address"}, {type: "uint256"}], outputs: [{type: "bool"}]},
+];
+const TIP_ABI = [
+    {type: "function", name: "tip", stateMutability: "payable", inputs: [{type: "uint256"}], outputs: []},
+];
+export const dataErc20Transfer = (to, amount) => encodeFunctionData({abi: ERC20_ABI, functionName: "transfer", args: [to, amount]});
+export const dataContractTip = (tokenId) => encodeFunctionData({abi: TIP_ABI, functionName: "tip", args: [tokenId]});
+
 export const rhChain = defineChain({
     id: 4663,
     name: "Robinhood Chain",

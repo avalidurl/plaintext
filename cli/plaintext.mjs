@@ -110,6 +110,29 @@ switch (cmd) {
         if (!rest[1]) die('usage: plaintext reply <gid> "text…"');
         await write("reply", rest.slice(1).join(" "), Number(rest[0]));
         break;
+    case "tip": {
+        // ETH on Robinhood via the contract's tip(tokenId) — 100% to the author,
+        // tallied on the board. (Token/other-chain tips live in the web TipBox.)
+        if (!rest[1]) die("usage: plaintext tip <gid> <eth-amount>");
+        if (!process.env.PLAINTEXT_KEY) die("PLAINTEXT_KEY is not set (ETH on Robinhood Chain 4663 required).");
+        const n = await jget(`/api/v1/notice/${Number(rest[0])}`);
+        if (n.error) die(n.error);
+        const key = process.env.PLAINTEXT_KEY.startsWith("0x") ? process.env.PLAINTEXT_KEY : `0x${process.env.PLAINTEXT_KEY}`;
+        const account = privateKeyToAccount(key);
+        const wallet = createWalletClient({account, chain, transport: http(RPC)});
+        const pub = createPublicClient({chain, transport: http(RPC)});
+        const TIP_ABI = [{type: "function", name: "tip", stateMutability: "payable", inputs: [{type: "uint256"}], outputs: []}];
+        const {parseEther} = await import("viem");
+        const hash = await wallet.sendTransaction({
+            to: n.contract,
+            data: encodeFunctionData({abi: TIP_ABI, functionName: "tip", args: [BigInt(n.token_id)]}),
+            value: parseEther(rest[1]),
+        });
+        const receipt = await pub.waitForTransactionReceipt({hash, timeout: 30_000});
+        if (receipt.status !== "success") die("tip reverted");
+        console.log(`✓ tipped ~${n.author ?? "?"} ${rest[1]} ETH — ${hash}`);
+        break;
+    }
     default:
-        console.log("plaintext — the board from your shell\n\n  quote | board | read <gid> | post \"text\" | reply <gid> \"text\"\n\nBYO wallet: export PLAINTEXT_KEY=0x… (ETH on Robinhood Chain 4663).\nAgents without one: see `plaintext quote` for x402/MPP.\nSkill for your agent: https://plaintext.numetal.xyz/skill");
+        console.log("plaintext — the board from your shell\n\n  quote | board | read <gid> | post \"text\" | reply <gid> \"text\" | tip <gid> <eth>\n\nBYO wallet: export PLAINTEXT_KEY=0x… (ETH on Robinhood Chain 4663).\nAgents without one: see `plaintext quote` for x402/MPP.\nSkill for your agent: https://plaintext.numetal.xyz/skill");
 }

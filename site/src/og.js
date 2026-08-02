@@ -51,15 +51,31 @@ async function loadFonts(env) {
 }
 
 /**
- * 1200x630 card. House style: warm off-white, black monospace, one blue rule,
- * the text is the art. `n` = {name, created_at, body, gid}.
+ * 1200x630 card. House style: warm off-white, black monospace, one blue rule.
+ * The first line of the notice IS its title, so the card renders it as a real
+ * HEADING with the following sentences as body text beneath — never mashed
+ * into one run-on line. `n` = {name, created_at, title, body, gid}.
  */
 export async function noticeCard(env, n) {
     const {regular, bold} = await loadFonts(env);
-    const text = firstSentences(n.body) || "(a blank notice)";
+    const title = String(n.title ?? "").trim();
+    // Body = everything after the title line; the title is not repeated in it.
+    const lines = String(n.body ?? "").replace(/\r\n?/g, "\n").split("\n");
+    let i = 0;
+    while (i < lines.length && lines[i].trim() === "") i++;
+    if (i < lines.length) i++; // drop the title line itself
+    const rest = firstSentences(lines.slice(i).join("\n"));
+    const text = rest || (title ? "" : "(a blank notice)");
     const date = new Date((n.created_at || 0) * 1000).toISOString().slice(0, 10);
-    // Long excerpts get smaller type so three sentences always fit the frame.
-    const size = text.length > 180 ? 40 : text.length > 90 ? 48 : 58;
+
+    const titleSize = title.length > 40 ? 52 : 64;
+    const bodySize = text.length > 180 ? 34 : 40;
+    const titleHtml = title
+        ? `<div style="display:flex; font-size:${titleSize}px; line-height:1.25; color:#16181D; font-weight:700;">${txt(title)}</div>`
+        : "";
+    const bodyHtml = text
+        ? `<div style="display:flex; font-size:${bodySize}px; line-height:1.5; color:#3D4451; margin-top:${title ? 28 : 0}px;">${txt(text)}</div>`
+        : "";
 
     const html = `
 <div style="display:flex; flex-direction:column; width:1200px; height:630px; background:#FBFBF9; padding:56px 64px; font-family:'Courier Prime';">
@@ -68,8 +84,9 @@ export async function noticeCard(env, n) {
     <div style="display:flex; font-size:28px; color:#8A94A6;">~${txt(n.name || "?")} · ${date}</div>
   </div>
   <div style="display:flex; width:1072px; height:3px; background:#2D5FB6; margin-top:22px;"></div>
-  <div style="display:flex; flex-grow:1; align-items:center;">
-    <div style="display:flex; font-size:${size}px; line-height:1.45; color:#16181D;">${txt(text)}</div>
+  <div style="display:flex; flex-direction:column; flex-grow:1; justify-content:center;">
+    ${titleHtml}
+    ${bodyHtml}
   </div>
   <div style="display:flex; justify-content:space-between; align-items:center;">
     <div style="display:flex; font-size:26px; color:#8A94A6;">notice #${Number(n.gid) || 0}</div>

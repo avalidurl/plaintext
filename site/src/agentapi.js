@@ -79,7 +79,8 @@ export async function apiBoard(env) {
 /** GET /api/v1/notice/<gid> — one notice + its remarks. */
 export async function apiNotice(env, gid) {
     const n = await env.DB.prepare(
-        `SELECT n.gid, n.title, n.body, n.cid, n.created_at, n.tx, n.contract, n.token_id, h.name AS author
+        `SELECT n.gid, n.title, n.body, n.cid, n.created_at, n.tx, n.contract, n.token_id,
+                n.author AS author_address, h.name AS author
          FROM notices n LEFT JOIN hands h ON h.address = n.author WHERE n.gid = ?1`,
     )
         .bind(gid)

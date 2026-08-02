@@ -1,7 +1,21 @@
 import React, {useEffect, useState, useCallback} from "react";
 import {usePrivy, useWallets, useSendTransaction, useLinkAccount, useConnectWallet} from "@privy-io/react-auth";
-import {parseEther} from "viem";
-import {readName, readPosts, dataFor, chainFor, contractFor, balances, rhChain, ethChain} from "./chain.js";
+import {parseEther, encodeFunctionData} from "viem";
+import {
+    readName,
+    readPosts,
+    dataFor,
+    chainFor,
+    contractFor,
+    balances,
+    rhChain,
+    ethChain,
+    TIP_OPTIONS,
+    dataErc20Transfer,
+    dataContractTip,
+    POSTS_CONTRACT,
+} from "./chain.js";
+import {parseUnits} from "viem";
 import {normalize, profileMessage} from "./profileMsg.js";
 
 const fmtEth = (wei) => (Number(wei) / 1e18).toFixed(6).replace(/0+$/, "").replace(/\.$/, "");
@@ -77,6 +91,8 @@ export default function App() {
 
     const reply = new URLSearchParams(location.search).get("reply");
     const isReply = reply && /^\d+$/.test(reply);
+    const tipGid = new URLSearchParams(location.search).get("tip");
+    const isTip = tipGid && /^\d+$/.test(tipGid);
 
     const load = useCallback(async (addr) => {
         try {
@@ -231,7 +247,9 @@ export default function App() {
                 </p>
             )}
 
-            {!state ? (
+            {isTip ? (
+                <TipBox wallet={wallet} address={address} gid={tipGid} />
+            ) : !state ? (
                 <p className="t">Reading the chain…</p>
             ) : !state.name ? (
                 <>
@@ -458,6 +476,98 @@ function WalletTools({embedded}) {
                 <span className="t">{msg}</span>
             </p>
             <p className="t">This wallet is yours. Export the key into any wallet, or withdraw its funds anywhere — nothing here holds you.</p>
+        </>
+    );
+}
+
+/**
+ * Tip a notice's author — money to the writer, not to the board. ETH on
+ * Robinhood rides the contract's tip(tokenId) (100% forwarded + tallied on the
+ * board); every other option is a plain transfer straight to the author's
+ * address on that token's own chain. No name needed to tip.
+ */
+function TipBox({wallet, address, gid}) {
+    const {sendTransaction} = useSendTransaction();
+    const [n, setN] = useState(null); // the notice (author_address, contract, token_id, title)
+    const [opt, setOpt] = useState("eth-rh");
+    const [amt, setAmt] = useState("");
+    const [msg, setMsg] = useState("");
+    const [busy, setBusy] = useState(false);
+
+    useEffect(() => {
+        (async () => {
+            try {
+                const r = await fetch(`/api/v1/notice/${gid}`);
+                setN(await r.json());
+            } catch {
+                setMsg("Couldn't load the notice.");
+            }
+        })();
+    }, [gid]);
+
+    if (!n) return <p className="t">Loading the notice…</p>;
+    if (n.error) return <p className="warn">{n.error}</p>;
+    // The contract-tip path only exists on the CURRENT posts contract; archived
+    // notices still take every direct-transfer option.
+    const onCurrent = String(n.contract).toLowerCase() === POSTS_CONTRACT.toLowerCase();
+    const options = TIP_OPTIONS.filter((x) => x.kind !== "contract-tip" || onCurrent);
+    const o = options.find((x) => x.id === opt) ?? options[0];
+
+    async function tip() {
+        try {
+            if (!amt || Number(amt) <= 0) return alert("Enter an amount.");
+            const value = parseUnits(amt, o.decimals);
+            setBusy(true);
+            if (wallet && chainOf(wallet) !== o.chainId) {
+                setMsg("Approve the network switch in your wallet…");
+                await wallet.switchChain(o.chainId);
+            }
+            setMsg("Confirm in your wallet…");
+            let tx;
+            if (o.kind === "contract-tip") {
+                tx = {to: n.contract, data: dataContractTip(BigInt(n.token_id)), value, chainId: o.chainId};
+            } else if (o.kind === "native") {
+                tx = {to: n.author_address, value, chainId: o.chainId};
+            } else {
+                tx = {to: o.token, data: dataErc20Transfer(n.author_address, value), chainId: o.chainId};
+            }
+            const {hash} = await sendTransaction(tx, {address});
+            setMsg(`Sent — thank you. ${hash.slice(0, 10)}…`);
+            setAmt("");
+        } catch (e) {
+            const m = e?.shortMessage || e?.message || "Failed.";
+            setMsg(/insufficient|exceeds/i.test(m) ? `Not enough on that chain for this tip.` : m);
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    return (
+        <>
+            <p className="t">
+                tipping <b>~{n.author || "?"}</b> for “{n.title || `notice #${gid}`}” — every cent goes to the
+                author; the board takes nothing.
+            </p>
+            <p>
+                <select value={opt} onChange={(e) => setOpt(e.target.value)}>
+                    {options.map((x) => (
+                        <option key={x.id} value={x.id}>
+                            {x.label}
+                        </option>
+                    ))}
+                </select>{" "}
+                <input value={amt} onChange={(e) => setAmt(e.target.value)} placeholder="amount" style={{width: "8rem"}} />{" "}
+                <button disabled={busy} onClick={tip}>
+                    Tip
+                </button>
+            </p>
+            <p className="t">
+                {o.kind === "contract-tip"
+                    ? "goes through the contract and shows in the author's tip tally."
+                    : `a direct ${o.label} transfer to the author's wallet.`}{" "}
+                <a href={`/notices/${gid}`}>back to the notice</a>
+            </p>
+            <p id="status">{msg}</p>
         </>
     );
 }

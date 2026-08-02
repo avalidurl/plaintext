@@ -8,7 +8,7 @@ if (typeof globalThis.Buffer === "undefined") globalThis.Buffer = Buffer;
 import React from "react";
 import {createRoot} from "react-dom/client";
 import {PrivyProvider} from "@privy-io/react-auth";
-import {rhChain, ethChain} from "./chain.js";
+import {rhChain, ethChain, baseChain} from "./chain.js";
 import App from "./App.jsx";
 import "./style.css";
 
@@ -34,7 +34,7 @@ function Root() {
                 // Names live on Ethereum; posts settle on Robinhood. The wallet
                 // works on both — each write is routed to its chain explicitly.
                 defaultChain: rhChain,
-                supportedChains: [rhChain, ethChain],
+                supportedChains: [rhChain, ethChain, baseChain],
             }}
         >
             <div className="wrap">

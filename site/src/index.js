@@ -194,7 +194,7 @@ ${backHtml}
 <div class="b"></div>
 <p class="t">notice #${n.gid} &middot; <a href="${esc(gateway)}">ipfs</a> &middot; <a href="${esc(
             env.EXPLORER,
-        )}/tx/${esc(n.tx)}">chain</a>${replyLink}</p>
+        )}/tx/${esc(n.tx)}">chain</a> &middot; <a href="/join?tip=${n.gid}">tip the author</a>${replyLink}</p>
 ${repliesHtml}
 ${replyFoot}
 ${foot()}`,
