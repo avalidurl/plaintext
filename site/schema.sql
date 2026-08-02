@@ -68,6 +68,17 @@ CREATE TABLE IF NOT EXISTS orphan_pins (
     pinned_at   INTEGER NOT NULL
 );
 
+-- Agent-write payment ledger (x402/MPP). One settlement = one write; `key` is the
+-- EIP-3009 nonce or MPP settlement tx, `ref` the client idempotency key, `result`
+-- the JSON we returned. A MONEY RECORD — never dropped, never rebuilt.
+CREATE TABLE IF NOT EXISTS agent_payments (
+    key         TEXT PRIMARY KEY,
+    ref         TEXT,
+    result      TEXT,
+    created_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_agent_payments_ref ON agent_payments(ref);
+
 -- Off-chain profile metadata (bio, links). NOT rebuildable from the chain — signed
 -- by the owner (see /api/profile). NEVER dropped.
 CREATE TABLE IF NOT EXISTS profiles (

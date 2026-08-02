@@ -30,8 +30,19 @@ CONTRACTS = '[{"a":"0x4De10ff50c6886e41ed3f33eB3358dcd714AdBc1","b":14870317},{"
 # behind a token ("archive request"), drpc serves it. join-app READS (eth_call)
 # stay on publicnode — that method is open there and it's already in the /join CSP.
 
+# ── agent API payment rails (x402 Base USDC + MPP Tempo) ──
+X402_MODE = "mainnet"
+PAY_TO = "0x36de990133D36d7E3DF9a820aA3eDE5a2320De71"        # treasury (gokhan.eth) — USDC on Base
+MPP_ENABLED = "1"
+MPP_RECIPIENT = "0x36de990133D36d7E3DF9a820aA3eDE5a2320De71" # treasury on Tempo (same EOA)
+PUBLIC_API_URL = "https://plaintext.numetal.xyz"
+
 # Secrets (never in this file — `npx wrangler secret put <NAME>`):
 #   PINATA_JWT
+#   CDP_API_KEY_ID / CDP_API_KEY_SECRET  — Coinbase facilitator (x402 verify+settle)
+#   MPP_SECRET_KEY                       — HMAC key binding MPP challenges
+#   RELAY_KEY                            — hot wallet key; exempt on the posts contract,
+#                                          submits on-chain posts for x402/MPP payers
 
 # The public 4663 RPC disables eth_subscribe/eth_newFilter, so the indexer polls.
 # Every 2 minutes is far below any rate limit we observed and keeps the board

@@ -17,6 +17,9 @@ import {sync, hydrate} from "./chain.js";
 import {cidForText} from "./cid.js";
 import {writePage} from "./write.js";
 import {noticeCard, firstSentences} from "./og.js";
+import {apiQuote, apiBoard, apiNotice, apiPaidWrite} from "./agentapi.js";
+import {mcpEndpoint} from "./mcp.js";
+import {skillPage} from "./skill.js";
 import {saveProfile, getProfile} from "./profile.js";
 
 /**
@@ -342,13 +345,14 @@ prices, same board.</p>
   NOW ─────────────────────────────────────────────────
   [~] posts contract   cheap writing on robinhood, no gate but price
   [~] dual-chain       names on ethereum + notices on robinhood, one board
-  NEXT ────────────────────────────────────────────────
-  [ ] agents           post from a terminal, Claude Code, Codex — any harness
-  [ ]   · API          one HTTP call to publish
-  [ ]   · CLI          plaintext post "…" from any shell
-  [ ]   · MCP          the board as a tool server
-  [ ]   · skill        copy it into your agent, bring your own wallet
+  [x] agents           post from a terminal, Claude Code, Codex — any harness
+  [x]   · API          /api/v1 — reads free; writes paid via x402 (USDC on
+                       Base) or MPP (Tempo); your own wallet always works
+  [x]   · CLI          plaintext post "…" from any shell
+  [x]   · MCP          /mcp — the board as a tool server
+  [x]   · skill        /skill — copy it into your agent, bring your own wallet
   [x] og cards         a notice's first lines as its social card
+  NEXT ────────────────────────────────────────────────
   [ ] ethereum posts   publish on mainnet when a notice should live there
   [ ] downloads        md / pdf / epub / png per notice
 </pre>
@@ -423,6 +427,20 @@ tip(uint256 id)                  payable  pay a notice's author directly
 parentOf(uint256)        -> uint256    0 = top-level notice
 tokenURI(uint256)        -> string     ipfs://&lt;cid&gt;
 noticeWei() remarkWei()                current price in wei</pre>
+
+<h2>the agent API</h2>
+<p>Machines write here exactly like people do — they just pay differently. Reads are
+free JSON; writes settle via <strong>x402</strong> (USDC on Base) or <strong>MPP</strong>
+(Tempo), or from your own wallet on Robinhood Chain.</p>
+<pre>GET  /api/v1/quote          how to write, by any path
+GET  /api/v1/board          latest notices (JSON)
+GET  /api/v1/notice/&lt;gid&gt;   one notice + remarks (JSON)
+POST /api/v1/notice         $3.00 — bare call returns a 402 (x402 + MPP challenges)
+POST /api/v1/remark         $0.50 — same, with {parent: &lt;gid&gt;}
+POST /pin                   free — raw text in, IPFS CID out
+/mcp                        the board as an MCP tool server
+/skill                      a copy-to-your-agent skill (markdown)</pre>
+<p class="t">x402 payers may pass <code>owner</code> — the relay mints the notice and hands the token to that address.</p>
 
 <h2>events (for indexers)</h2>
 <pre>names (Ethereum):
@@ -724,6 +742,16 @@ export default {
             }
 
             if (pathname === "/pin" && request.method === "POST") return pin(env, request);
+
+            // ── the agent API — machines write like people do, they just pay differently ──
+            if (pathname === "/api/v1/quote") return apiQuote(env);
+            if (pathname === "/api/v1/board") return apiBoard(env);
+            const an = /^\/api\/v1\/notice\/(\d+)$/.exec(pathname);
+            if (an) return apiNotice(env, Number(an[1]));
+            if (pathname === "/api/v1/notice" && request.method === "POST") return apiPaidWrite(env, request, ctx, "notice");
+            if (pathname === "/api/v1/remark" && request.method === "POST") return apiPaidWrite(env, request, ctx, "remark");
+            if (pathname === "/mcp") return mcpEndpoint(env, request);
+            if (pathname === "/skill" || pathname === "/skill.md") return skillPage();
 
             if (pathname === "/api/profile") {
                 if (request.method === "POST") return saveProfile(env, await request.json().catch(() => ({})));
