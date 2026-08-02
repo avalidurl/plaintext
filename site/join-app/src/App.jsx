@@ -1,7 +1,7 @@
 import React, {useEffect, useState, useCallback} from "react";
 import {usePrivy, useWallets, useSendTransaction, useLinkAccount, useConnectWallet} from "@privy-io/react-auth";
 import {parseEther} from "viem";
-import {read, data, balanceOf, CONTRACT, rhChain} from "./chain.js";
+import {readName, readPosts, dataFor, chainFor, contractFor, balances, rhChain, ethChain} from "./chain.js";
 import {normalize, profileMessage} from "./profileMsg.js";
 
 const fmtEth = (wei) => (Number(wei) / 1e18).toFixed(6).replace(/0+$/, "").replace(/\.$/, "");
@@ -15,15 +15,12 @@ const chainOf = (w) => Number(String(w?.chainId ?? "").split(":").pop());
 const walletLabel = (w) =>
     w.walletClientType === "privy" ? "plaintext wallet" : w.meta?.name || w.walletClientType || "your wallet";
 
-// Relay deep links, format + "robinhood" slug verified against relay.link's live
-// chains API + deep-linking docs. Privy's own on-ramp can't reach 4663, so Relay
-// is how funds move in/out and swap.
-const USDG = "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168";
-const ETH0 = "0x0000000000000000000000000000000000000000";
-const DEPOSIT = (addr) => `https://relay.link/bridge/robinhood?toAddress=${addr}`;
-const SWAP = (addr) =>
-    `https://relay.link/bridge/robinhood?fromChainId=4663&toAddress=${addr}&fromCurrency=${ETH0}&toCurrency=${USDG}`;
-const RELAY = DEPOSIT; // "add funds" warning uses the deposit link
+// Relay deep links — deposit FROM any chain/token TO the chain you pick; the
+// wallet is one address on every EVM chain, so the destination is just a choice.
+// "robinhood" slug verified against relay.link's live chains API. (Swap removed.)
+const DEPOSIT_RH = (addr) => `https://relay.link/bridge/robinhood?toAddress=${addr}`;
+const DEPOSIT_ETH = (addr) => `https://relay.link/bridge/ethereum?toAddress=${addr}`;
+const RELAY = DEPOSIT_RH; // "add funds" warning uses the RH deposit link (notices)
 
 // Copy-to-clipboard affordance — makes the EVM address one-click copyable.
 function Copy({text}) {
@@ -83,12 +80,13 @@ export default function App() {
 
     const load = useCallback(async (addr) => {
         try {
-            const [name, exempt, balance] = await Promise.all([
-                read("nameOf", [addr]),
-                read("exempt", [addr]),
-                balanceOf(addr),
+            // Name + exemption live on ETHEREUM (the name NFT); balances on both chains.
+            const [name, exempt, bal] = await Promise.all([
+                readName("nameOf", [addr]),
+                readName("exempt", [addr]),
+                balances(addr),
             ]);
-            setInfo((m) => ({...m, [addr]: {name, exempt, balance}}));
+            setInfo((m) => ({...m, [addr]: {name, exempt, rh: bal.rh, eth: bal.eth}}));
         } catch (e) {
             setStatus("Couldn't read the chain. Retry in a moment.");
         }
@@ -127,17 +125,21 @@ export default function App() {
         !(user.linkedAccounts || []).some((a) => ["email", "phone", "passkey"].includes(a.type));
 
     async function send(fnName, args, valueWei, pending) {
+        // Names (enter/enterAs/rename) are ETHEREUM transactions; posts/replies are
+        // Robinhood ones. Route each write to its chain explicitly.
+        const targetId = chainFor(fnName);
+        const chainName = targetId === ethChain.id ? "Ethereum" : "Robinhood Chain (4663)";
         try {
             setBusy(true);
-            // The embedded wallet is pinned to 4663 by defaultChain, but a
-            // connected wallet is on whatever network its extension last used —
-            // sending there would go to the wrong chain. Ask it to switch first.
-            if (wallet && chainOf(wallet) !== rhChain.id) {
-                setStatus("Switch your wallet to Robinhood Chain (4663) to continue…");
-                await wallet.switchChain(rhChain.id);
+            // The embedded wallet follows the chainId we pass, but a connected
+            // wallet is on whatever network its extension last used — sending
+            // there would go to the wrong chain. Ask it to switch first.
+            if (wallet && chainOf(wallet) !== targetId) {
+                setStatus(`Switch your wallet to ${chainName} to continue…`);
+                await wallet.switchChain(targetId);
             }
             setStatus(pending);
-            const tx = {to: CONTRACT, data: data(fnName, args)};
+            const tx = {to: contractFor(fnName), data: dataFor(fnName, args), chainId: targetId};
             if (valueWei && valueWei > 0n) tx.value = valueWei;
             const {hash} = await sendTransaction(tx, {address});
             setStatus("Sent. Waiting for the chain…");
@@ -149,9 +151,9 @@ export default function App() {
         } catch (e) {
             const m = (e && (e.shortMessage || e.message)) || "Transaction failed.";
             if (/insufficient|funds|exceeds balance/i.test(m)) {
-                setStatus("You need ETH on Robinhood Chain to pay for this.");
-            } else if (/chain|network|4663/i.test(m)) {
-                setStatus("This wallet isn't on Robinhood Chain (4663). Approve the network switch, then try again.");
+                setStatus(`You need ETH on ${chainName} to pay for this.`);
+            } else if (/chain|network|4663|switch/i.test(m)) {
+                setStatus(`This wallet isn't on ${chainName}. Approve the network switch, then try again.`);
             } else {
                 setStatus(m);
             }
@@ -213,9 +215,15 @@ export default function App() {
                 </p>
             )}
 
-            {state && !state.exempt && state.balance === 0n && (
+            {state && !state.exempt && !state.name && state.eth === 0n && (
                 <p className="warn">
-                    This wallet has no ETH on Robinhood Chain, so it can't pay yet.{" "}
+                    Your name mints on <b>Ethereum</b>, and this wallet has no ETH there yet. Send ETH on Ethereum
+                    mainnet to {address ? short(address) : "it"} first.
+                </p>
+            )}
+            {state && !state.exempt && state.name && state.rh === 0n && (
+                <p className="warn">
+                    Notices settle on Robinhood Chain, and this wallet has no ETH there.{" "}
                     <a href={RELAY(address)} target="_blank" rel="noreferrer">
                         Add funds
                     </a>{" "}
@@ -294,7 +302,9 @@ function WalletPicker({wallets, selected, onSelect, info, connectWallet}) {
                                 {!i
                                     ? "reading the chain…"
                                     : `${i.name ? `~${i.name}` : "no name yet — the door first"} · ${
-                                          i.exempt ? "writes free" : `${fmtEth(i.balance)} ETH`
+                                          i.exempt
+                                              ? "writes free"
+                                              : `rh ${i.rh != null ? fmtEth(i.rh) : "…"} · eth ${i.eth != null ? fmtEth(i.eth) : "…"}`
                                       }`}
                             </span>
                         </label>{" "}
@@ -322,15 +332,17 @@ function Door({state, busy, send}) {
                 setDealt(0n);
                 setChosen(0n);
             } else {
-                setDealt(await read("doorAssignedWei"));
-                setChosen(await read("doorChosenWei"));
+                setDealt(await readName("doorAssignedWei"));
+                setChosen(await readName("doorChosenWei"));
             }
         })();
     }, [state.exempt]);
-    const usd = state.exempt ? "free" : null;
     return (
         <>
-            <p className="t">You're not through the door yet.</p>
+            <p className="t">
+                You're not through the door yet. Your name is minted to you as an NFT on <b>Ethereum</b> — it's
+                yours to keep, trade, or sell.
+            </p>
             <p>
                 <button disabled={busy || dealt === null} onClick={() => send("enter", [], dealt, "Entering…")}>
                     {state.exempt ? "Enter free — name dealt to you" : "Enter for ~$1 — name dealt to you"}
@@ -368,10 +380,11 @@ function WalletTools({embedded}) {
     const [bal, setBal] = useState(null);
     const [to, setTo] = useState("");
     const [amt, setAmt] = useState("");
+    const [fromChain, setFromChain] = useState("rh"); // which chain the withdraw moves ETH on
     const [msg, setMsg] = useState("");
     const [busy, setBusy] = useState(false);
 
-    const loadBal = () => balanceOf(addr).then(setBal).catch(() => {});
+    const loadBal = () => balances(addr).then(setBal).catch(() => {});
     useEffect(() => {
         loadBal();
     }, [addr]);
@@ -379,12 +392,18 @@ function WalletTools({embedded}) {
     async function withdraw(all) {
         try {
             if (!/^0x[0-9a-fA-F]{40}$/.test(to.trim())) return alert("Enter a valid 0x recipient address.");
-            const reserve = 50_000_000_000_000n; // ~0.00005 ETH kept back for gas on "all"
-            const value = all ? (bal ?? 0n) - reserve : parseEther(amt || "0");
-            if (value <= 0n) return alert("Amount is too small (or the wallet is empty).");
+            const onEth = fromChain === "eth";
+            const have = onEth ? bal?.eth ?? 0n : bal?.rh ?? 0n;
+            // Mainnet gas is real; RH gas is dust. Reserve enough on each for the send itself.
+            const reserve = onEth ? 300_000_000_000_000n : 50_000_000_000_000n;
+            const value = all ? have - reserve : parseEther(amt || "0");
+            if (value <= 0n) return alert("Amount is too small (or the wallet is empty on that chain).");
             setBusy(true);
             setMsg("Confirm in your wallet…");
-            const {hash} = await sendTransaction({to: to.trim(), value}, {address: addr});
+            const {hash} = await sendTransaction(
+                {to: to.trim(), value, chainId: onEth ? ethChain.id : rhChain.id},
+                {address: addr},
+            );
             setMsg(`Sent — ${hash.slice(0, 10)}…`);
             setTo("");
             setAmt("");
@@ -400,17 +419,31 @@ function WalletTools({embedded}) {
     return (
         <>
             <p className="t">
-                your plaintext wallet{bal != null ? ` · ${fmtEth(bal)} ETH` : ""} · {`${addr.slice(0, 6)}…${addr.slice(-4)}`}{" "}
-                <Copy text={addr} />
+                your plaintext wallet · {`${addr.slice(0, 6)}…${addr.slice(-4)}`} <Copy text={addr} />
+                {bal != null
+                    ? ` · rh ${bal.rh != null ? fmtEth(bal.rh) : "…"} ETH · eth ${bal.eth != null ? fmtEth(bal.eth) : "…"} ETH`
+                    : ""}
+            </p>
+            <p className="t">
+                deposit — from any chain or token, to this one address; pick where it lands:
             </p>
             <p>
-                <button onClick={() => window.open(DEPOSIT(addr), "_blank", "noopener")}>Deposit</button>{" "}
-                <button onClick={() => window.open(SWAP(addr), "_blank", "noopener")}>Swap</button>{" "}
-                <span className="t">(via Relay — bridge in from any chain, or swap ETH ↔ USDG)</span>
+                <button onClick={() => window.open(DEPOSIT_ETH(addr), "_blank", "noopener")}>
+                    Deposit on Ethereum
+                </button>{" "}
+                <span className="t">(your name lives here)</span>{" "}
+                <button onClick={() => window.open(DEPOSIT_RH(addr), "_blank", "noopener")}>
+                    Deposit on Robinhood
+                </button>{" "}
+                <span className="t">(notices settle here)</span>
             </p>
             <p>
                 <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="withdraw to: 0x…" />{" "}
                 <input value={amt} onChange={(e) => setAmt(e.target.value)} placeholder="ETH" style={{width: "6rem"}} />{" "}
+                <select value={fromChain} onChange={(e) => setFromChain(e.target.value)}>
+                    <option value="rh">from robinhood</option>
+                    <option value="eth">from ethereum</option>
+                </select>{" "}
                 <button disabled={busy} onClick={() => withdraw(false)}>
                     Withdraw
                 </button>{" "}
@@ -499,7 +532,7 @@ function RenameBox({exempt, busy, send}) {
     const [name, setName] = useState("");
     const [price, setPrice] = useState(null);
     useEffect(() => {
-        (async () => setPrice(exempt ? 0n : await read("doorChosenWei")))();
+        (async () => setPrice(exempt ? 0n : await readName("doorChosenWei")))();
     }, [exempt]);
     return (
         <>
@@ -530,7 +563,7 @@ function RenameBox({exempt, busy, send}) {
 function Compose({name, exempt, isReply, reply, busy, send, body, setBody}) {
     const [price, setPrice] = useState(null);
     useEffect(() => {
-        (async () => setPrice(exempt ? 0n : await read(isReply ? "remarkWei" : "noticeWei")))();
+        (async () => setPrice(exempt ? 0n : await readPosts(isReply ? "remarkWei" : "noticeWei")))();
     }, [exempt, isReply]);
     const cost = exempt ? "free" : isReply ? "~$0.50" : "~$3.00";
     async function publish() {
@@ -544,7 +577,8 @@ function Compose({name, exempt, isReply, reply, busy, send, body, setBody}) {
     return (
         <>
             <p className="t">
-                {isReply ? `replying to notice #${reply}` : `writing as ${name}`} · {cost}
+                {isReply ? `replying to notice #${reply}` : `writing as ${name}`} · {cost} · publishes on
+                robinhood chain (an ethereum option is coming)
             </p>
             <textarea
                 rows={12}

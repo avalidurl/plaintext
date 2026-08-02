@@ -20,11 +20,12 @@ PRIVY_APP_ID = "cmrtnyo1h00950cl8ksgyg0bs"  # public, client-side
 # v1/v2 superseded (empty, no data). tx: broadcast/Deploy.s.sol/4663/run-latest.json
 CONTRACT = "0xC4bfCb7c103Ad4571D98b5F5bC9bc7b860023f5c"
 DEPLOY_BLOCK = "15036412"
-# CONTRACT (above) is the WRITE target — /join posts + replies go here.
-# CONTRACTS is every version the board READS, oldest first. Adding a version here
-# is how the board evolves WITHOUT nuking old posts: the old contract keeps being
-# indexed. v2 holds the founder's first notices; v3 adds rename() for new writes.
-CONTRACTS = '[{"a":"0x4De10ff50c6886e41ed3f33eB3358dcd714AdBc1","b":14870317},{"a":"0xC4bfCb7c103Ad4571D98b5F5bC9bc7b860023f5c","b":15036412}]'
+# CONTRACT (above) is the RH WRITE target — /join posts + replies go here.
+# CONTRACTS is every contract the board READS, oldest first, ACROSS CHAINS ("r" =
+# rpc override; no "r" = Robinhood). Adding an entry is how the board evolves
+# WITHOUT nuking old posts. v2 holds the founder's first notices; v3 was the last
+# combined contract; the Ethereum entry is the NAMES NFT (identity source of truth).
+CONTRACTS = '[{"a":"0x4De10ff50c6886e41ed3f33eB3358dcd714AdBc1","b":14870317},{"a":"0xC4bfCb7c103Ad4571D98b5F5bC9bc7b860023f5c","b":15036412},{"a":"0xe15a6ea3dd93af1d8a1c1c27f487a44578a89e8b","b":25663360,"r":"https://ethereum-rpc.publicnode.com"}]'
 
 # Secrets (never in this file — `npx wrangler secret put <NAME>`):
 #   PINATA_JWT

@@ -20,14 +20,18 @@ export const TOPICS = {
     Entered: "0x519e31bd449c35eb7a5eea6fae2ae58fb7a0abcf4820e29bc7c729df0c2b88cd",
     // Renamed(address indexed hand, string oldName, string newName)
     Renamed: "0xd68ae3eda53127e00f2c878c56025cbaac05ea145d1164c9fb1a9262d6515a05",
+    // NameMoved(address indexed from, address indexed to, uint256 indexed tokenId, string name)
+    // Emitted by the ETHEREUM names contract when a name NFT is sold/transferred —
+    // identity follows the token, so the board moves the display name to the buyer.
+    NameMoved: "0xb2aa12def30f1c01f09e4e7db42fea2659b3f9e6b12f5c96de915f1cd633b365",
     // Posted(address indexed hand, uint256 indexed id, uint256 indexed parent, string cid)
     Posted: "0x6c333a64127ff0c17fc2b929e4d52c19dabeec7c8ef020cd06faf1d0ad486820",
     // Tipped(address indexed from, address indexed to, uint256 indexed id, uint256 amount)
     Tipped: "0x2c2d3fe639ed09f250554d4c3efe2aed6ee4570a4a426c236d1f5a227aaa6c9e",
 };
 
-export async function rpc(env, method, params) {
-    const r = await fetch(env.RPC_URL, {
+async function rpcCall(url, method, params) {
+    const r = await fetch(url, {
         method: "POST",
         headers: {"content-type": "application/json"},
         body: JSON.stringify({jsonrpc: "2.0", id: 1, method, params}),
@@ -37,6 +41,8 @@ export async function rpc(env, method, params) {
     if (j.error) throw new Error(`rpc ${method}: ${j.error.message}`);
     return j.result;
 }
+
+export const rpc = (env, method, params) => rpcCall(env.RPC_URL, method, params);
 
 const hexToInt = (h) => parseInt(h, 16);
 const topicAddr = (t) => "0x" + t.slice(26).toLowerCase();
@@ -60,34 +66,43 @@ function decodeBool(dataHex, argIndex) {
 }
 
 /**
- * The list of contract versions the board indexes, OLDEST first. Adding a version
- * here is how the board evolves without nuking old posts — the old contract keeps
- * being read. Comes from env.CONTRACTS (JSON `[{"a":"0x…","b":block}, …]`); falls
- * back to the single env.CONTRACT for older configs.
+ * The list of contracts the board indexes, OLDEST first — across CHAINS. Adding an
+ * entry is how the board evolves without nuking old posts — the old contract keeps
+ * being read. Comes from env.CONTRACTS (JSON `[{"a":"0x…","b":block,"r":"rpc?"}, …]`,
+ * `r` optional — defaults to env.RPC_URL, i.e. Robinhood Chain; the Ethereum names
+ * contract sets it). Falls back to the single env.CONTRACT for older configs.
  */
 function contractList(env) {
     try {
         const list = JSON.parse(env.CONTRACTS || "[]");
         if (Array.isArray(list) && list.length) {
-            return list.map((c) => ({address: String(c.a).toLowerCase(), block: Number(c.b) || 0}));
+            return list.map((c) => ({
+                address: String(c.a).toLowerCase(),
+                block: Number(c.b) || 0,
+                rpc: c.r || env.RPC_URL,
+            }));
         }
     } catch {
         /* fall through */
     }
     if (env.CONTRACT && env.CONTRACT !== "0x") {
-        return [{address: env.CONTRACT.toLowerCase(), block: Number(env.DEPLOY_BLOCK || 0)}];
+        return [{address: env.CONTRACT.toLowerCase(), block: Number(env.DEPLOY_BLOCK || 0), rpc: env.RPC_URL}];
     }
     return [];
 }
 
-/** Pull new logs from every indexed contract and fold them into D1. */
+/** Pull new logs from every indexed contract (each on its own chain) into D1. */
 export async function sync(env, {maxBlocks = 500_000} = {}) {
     const contracts = contractList(env);
     if (!contracts.length) return {skipped: "no contracts"};
-    const head = hexToInt(await rpc(env, "eth_blockNumber", []));
+    // Heads differ per chain, so resolve one per distinct RPC.
+    const heads = new Map();
+    for (const c of contracts) {
+        if (!heads.has(c.rpc)) heads.set(c.rpc, hexToInt(await rpcCall(c.rpc, "eth_blockNumber", [])));
+    }
     const results = [];
-    for (const c of contracts) results.push(await syncContract(env, c, head, maxBlocks));
-    return {head, contracts: results};
+    for (const c of contracts) results.push(await syncContract(env, c, heads.get(c.rpc), maxBlocks));
+    return {contracts: results};
 }
 
 /**
@@ -96,14 +111,14 @@ export async function sync(env, {maxBlocks = 500_000} = {}) {
  * committed when we resolve its gid. Every write is an idempotent upsert keyed on
  * chain-derived identity, so replaying a range changes nothing.
  */
-async function syncContract(env, {address, block}, head, maxBlocks) {
+async function syncContract(env, {address, block, rpc: rpcUrl}, head, maxBlocks) {
     const key = `logs:${address}`;
     const row = await env.DB.prepare("SELECT last_block FROM cursor WHERE k=?1").bind(key).first();
     const from = row ? row.last_block + 1 : block;
     if (from > head) return {address, upToDate: true};
 
     const to = Math.min(head, from + maxBlocks);
-    const logs = await rpc(env, "eth_getLogs", [
+    const logs = await rpcCall(rpcUrl, "eth_getLogs", [
         {address, fromBlock: "0x" + from.toString(16), toBlock: "0x" + to.toString(16)},
     ]);
 
@@ -111,7 +126,7 @@ async function syncContract(env, {address, block}, head, maxBlocks) {
     const blocks = [...new Set(logs.map((l) => l.blockNumber))];
     const times = new Map();
     for (const b of blocks) {
-        const blk = await rpc(env, "eth_getBlockByNumber", [b, false]);
+        const blk = await rpcCall(rpcUrl, "eth_getBlockByNumber", [b, false]);
         times.set(b, hexToInt(blk.timestamp));
     }
 
@@ -148,6 +163,24 @@ async function syncContract(env, {address, block}, head, maxBlocks) {
             const newName = decodeString(log.data, 1); // arg 0 = old, arg 1 = new
             await env.DB.prepare("UPDATE hands SET name=?1, chosen=1, name_block=?2 WHERE address=?3 AND ?2>=name_block")
                 .bind(newName, blockNo, addr)
+                .run();
+            renamed++;
+        } else if (t0 === TOPICS.NameMoved) {
+            // A name NFT was sold/transferred: identity follows the token. Drop the
+            // seller's row (iff it still shows this name) and give the buyer the name.
+            const fromA = topicAddr(log.topics[1]);
+            const toA = topicAddr(log.topics[2]);
+            const moved = decodeString(log.data, 0);
+            await env.DB.prepare("DELETE FROM hands WHERE address=?1 AND name=?2").bind(fromA, moved).run();
+            await env.DB.prepare(
+                `INSERT INTO hands (address,name,chosen,entered_at,block,name_block,tx)
+                 VALUES (?1,?2,1,?3,?4,?4,?5)
+                 ON CONFLICT(address) DO UPDATE SET
+                   name=CASE WHEN excluded.name_block>=hands.name_block THEN excluded.name ELSE hands.name END,
+                   chosen=CASE WHEN excluded.name_block>=hands.name_block THEN 1 ELSE hands.chosen END,
+                   name_block=MAX(hands.name_block, excluded.name_block)`,
+            )
+                .bind(toA, moved, ts, blockNo, log.transactionHash)
                 .run();
             renamed++;
         } else if (t0 === TOPICS.Posted) {

@@ -29,6 +29,7 @@ export function page({title, body, head = "", description = TAGLINE}) {
 <link rel="alternate" type="application/atom+xml" href="/feed.xml">
 ${head}
 </head><body>
+<div class="topbar"><a class="home" href="/">plaintext</a><a class="btn" href="/join">write a notice</a></div>
 ${body}
 </body></html>`;
 }
@@ -38,7 +39,7 @@ export const masthead = () => `<pre>${esc(MASTHEAD)}</pre>`;
 export const nav = () => `<p class="t"><a href="/">the board</a> &middot; <a href="/hands">hands</a> &middot; <a href="/me">profile</a> &middot; <a href="/manual">manual</a> &middot; <a href="/join">write</a></p>`;
 
 export const foot = () =>
-    `<div class="b"></div><p class="t"><a href="/me">profile</a> &middot; <a href="/join">write</a> &middot; <a href="/hands">hands</a> &middot; <a href="/manual">manual</a> &middot; <a href="/spec">spec</a> &middot; <a href="/feed.xml">feed</a> &middot; every notice is a token on chain 4663</p>`;
+    `<div class="b"></div><p class="t"><a href="/me">profile</a> &middot; <a href="/join">write</a> &middot; <a href="/hands">hands</a> &middot; <a href="/manual">manual</a> &middot; <a href="/spec">spec</a> &middot; <a href="/club">the club</a> &middot; <a href="/roadmap">roadmap</a> &middot; <a href="/feed.xml">feed</a> &middot; every name is an ethereum NFT &middot; every notice a token onchain</p>`;
 
 /**
  * The one loud affordance on an otherwise quiet board. It is a plain <a> — the

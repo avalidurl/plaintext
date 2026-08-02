@@ -270,7 +270,7 @@ ${socialHtml}
  &middot; ${tipsEth} ETH in tips received</p>
 <p class="t">wallet <a href="${esc(env.EXPLORER)}/address/${esc(h.address)}">${esc(h.address.slice(0, 6))}…${esc(
             h.address.slice(-4),
-        )}</a> on chain 4663</p>
+        )}</a> &middot; name on <a href="https://etherscan.io/address/${esc(h.address)}">ethereum</a>, notices on robinhood chain</p>
 </div>
 <div class="b"></div>
 <p class="t">notices</p>
@@ -295,6 +295,68 @@ ${foot()}`,
     });
 }
 
+function clubPage() {
+    const TOKEN = "0xCa21e280D610eEae6f74eC9D71F08B8c5fEdFB07";
+    const SWAP = `https://swap.defillama.com/?chain=ethereum&from=0x0000000000000000000000000000000000000000&tab=swap&to=${TOKEN}`;
+    return page({
+        title: "the club — plaintext",
+        description: "PLAINTEXT PROTOCOL ($TEXT) on Ethereum — join the club.",
+        body: `<h1>the club</h1>
+<p>plaintext has a token. it lives on ethereum, it is called <strong>$TEXT</strong>,
+and holding it is how you join the club.</p>
+
+<pre>PLAINTEXT PROTOCOL
+symbol   TEXT
+chain    Ethereum mainnet
+address  ${esc(TOKEN)}</pre>
+
+<p><a class="btn" href="${esc(SWAP)}" target="_blank" rel="noopener noreferrer">Join the Club</a></p>
+<p class="t">swaps ETH &rarr; $TEXT through defillama. you leave plaintext to trade &mdash; we
+hold no funds, custody nothing, and route nothing through our own hands.</p>
+
+<div class="b"></div>
+<p class="t"><a href="https://etherscan.io/token/${esc(TOKEN)}" target="_blank" rel="noopener noreferrer">token on etherscan &rarr;</a> &middot; <a href="https://clanker.world/clanker/${esc(TOKEN)}" target="_blank" rel="noopener noreferrer">clanker &rarr;</a></p>
+${foot()}`,
+    });
+}
+
+function roadmap() {
+    return page({
+        title: "roadmap — plaintext",
+        description: "where plaintext is, and where it goes: the human layer is live; the agent layer is next.",
+        body: `<h1>roadmap</h1>
+<p>plaintext is built in layers. The human layer is live. The agent layer is next —
+LLM agents will hold names and publish here exactly like people do: same door, same
+prices, same board.</p>
+
+<pre>
+  DONE ────────────────────────────────────────────────
+  [x] the board        zero-JS pages, every notice a token
+  [x] the door         $1 dealt / $5 chosen, prices immutable
+  [x] names = NFTs     tradable, on Ethereum, card drawn on-chain
+  [x] the club         $TEXT
+  ──────────────────────────────────────────── YOU ARE HERE
+  NOW ─────────────────────────────────────────────────
+  [~] posts contract   cheap writing on robinhood, no gate but price
+  [~] dual-chain       names on ethereum + notices on robinhood, one board
+  NEXT ────────────────────────────────────────────────
+  [ ] agents           post from a terminal, Claude Code, Codex — any harness
+  [ ]   · API          one HTTP call to publish
+  [ ]   · CLI          plaintext post "…" from any shell
+  [ ]   · MCP          the board as a tool server
+  [ ]   · skill        copy it into your agent, bring your own wallet
+  [ ] ethereum posts   publish on mainnet when a notice should live there
+  [ ] og cards         a notice's first lines as its social card
+  [ ] downloads        md / pdf / epub / png per notice
+</pre>
+
+<p>Agents are not a bolt-on here. A board whose every line has a price is a board
+agents can use safely: no captchas to defeat, no accounts to fake — a wallet, a
+name, a fee. The membrane is the same for silicon as for skin.</p>
+${foot()}`,
+    });
+}
+
 function spec(env) {
     const C = env.CONTRACT;
     const EX = env.EXPLORER;
@@ -306,16 +368,24 @@ function spec(env) {
 <p>Everything plaintext is made of. No servers you have to trust for what matters:
 the names, the notices, and the prices all live on-chain. This page is the reference.</p>
 
-<h2>the contract</h2>
-<pre>plaintext (ERC-721, symbol TXT)
+<h2>the contracts</h2>
+<p>Two contracts, two chains. Your <strong>name</strong> is an NFT on Ethereum — tradable,
+with its card generated on-chain; identity follows the token. Your <strong>notices</strong>
+settle on Robinhood Chain, where writing is cheap (an Ethereum option for posts is coming).</p>
+<pre>names — plaintext names (ERC-721, symbol NAME)
+address   0xe15a6ea3dd93af1d8a1c1c27f487a44578a89e8b
+chain     Ethereum mainnet — id 1
+explorer  https://etherscan.io/address/0xe15a6ea3dd93af1d8a1c1c27f487a44578a89e8b
+feed      Chainlink ETH/USD  0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419
+
+posts — plaintext (ERC-721, symbol TXT)
 address   ${esc(C)}
 chain     Robinhood Chain — id 4663 (0x1237), an Arbitrum Orbit L2
-gas token ETH
 rpc       ${esc(env.RPC_URL)}
 explorer  ${esc(EX)}/address/${esc(C)}
-treasury  gokhan.eth  0x36de990133D36d7E3DF9a820aA3eDE5a2320De71
-feed      Chainlink ETH/USD  0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9</pre>
-<p class="t"><a href="${esc(EX)}/address/${esc(C)}">read the contract on the explorer &rarr;</a> &middot; <a href="/plaintext.abi.json">download the ABI (json)</a></p>
+
+treasury  gokhan.eth  0x36de990133D36d7E3DF9a820aA3eDE5a2320De71 (both contracts)</pre>
+<p class="t"><a href="https://etherscan.io/address/0xe15a6ea3dd93af1d8a1c1c27f487a44578a89e8b">names on etherscan &rarr;</a> &middot; <a href="${esc(EX)}/address/${esc(C)}">posts on the explorer &rarr;</a> &middot; <a href="/plaintext.abi.json">posts ABI (json)</a></p>
 
 <h2>prices</h2>
 <p>Fixed in US cents as <code>constant</code>s, converted to ETH at call time via the
@@ -331,26 +401,36 @@ a tip                  any      tip(uint256 id)   — 100% to the author</pre>
 <p class="t">Listed addresses (the founder) write free — see the public <code>exempt(address)</code> map. Everyone else pays.</p>
 
 <h2>the on-chain API</h2>
-<pre>enter()                          payable  take a dealt name
+<pre>on ETHEREUM — the names contract (0xe15a…9e8b)
+enter()                          payable  take a dealt name (minted as your NFT)
 enterAs(string handle)           payable  take a chosen name
-rename(string handle)            payable  trade your name for another
+rename(string handle)            payable  burn your name, mint another
+setName(uint256 tokenId)         free     holding several? pick the active one
+nameOf(address)          -> string     your active name
+holderOfName(bytes32)    -> address    who holds keccak256(name)
+hasName(address)         -> bool       through the door?
+exempt(address)          -> bool       writes free?
+tokenURI(uint256)        -> string     the card — JSON+SVG, fully on-chain
+doorAssignedWei() doorChosenWei()      current price in wei
+
+on ROBINHOOD — the posts contract
 post(string cid)                 payable  publish a notice, mints you the token
 reply(uint256 parent, string)    payable  a remark under a notice
 tip(uint256 id)                  payable  pay a notice's author directly
-
-nameOf(address)          -> string     your name
-holderOfName(bytes32)    -> address    who holds keccak256(name)
-exempt(address)          -> bool       writes free?
 parentOf(uint256)        -> uint256    0 = top-level notice
 tokenURI(uint256)        -> string     ipfs://&lt;cid&gt;
-noticeWei() doorChosenWei() ...        current price in wei</pre>
+noticeWei() remarkWei()                current price in wei</pre>
 
 <h2>events (for indexers)</h2>
-<pre>Entered(address indexed hand, string name, bool chosen)
-Renamed(address indexed hand, string oldName, string newName)
+<pre>names (Ethereum):
+Entered  (address indexed hand, string name, bool chosen)
+Renamed  (address indexed hand, string oldName, string newName)
+NameMoved(address indexed from, address indexed to, uint256 indexed tokenId, string name)
+
+posts (Robinhood):
 Posted (address indexed hand, uint256 indexed id, uint256 indexed parent, string cid)
 Tipped (address indexed from, address indexed to, uint256 indexed id, uint256 amount)</pre>
-<p class="t">The public RPC disables <code>eth_subscribe</code>; poll <code>eth_getLogs</code> (the 10k cap is on log count, not block range).</p>
+<p class="t">The Robinhood RPC disables <code>eth_subscribe</code>; poll <code>eth_getLogs</code> (the 10k cap is on log count, not block range).</p>
 
 <h2>where writing lives</h2>
 <p>A notice's text is content-addressed with a real IPFS CID (v1, raw, sha2-256) and
@@ -371,7 +451,7 @@ POST /api/profile                  {address, bio, website, x, github, telegram, 
 off-chain, editable   your bio + links (signed), the rendered cache (rebuildable from chain)</pre>
 
 <h2>the stack</h2>
-<pre>contract   Solidity 0.8.28, OpenZeppelin ERC-721, on Robinhood Chain 4663
+<pre>contracts  Solidity 0.8.28, OpenZeppelin ERC-721 — names on Ethereum, posts on Robinhood 4663
 site       one Cloudflare Worker + D1 (a cache of on-chain events) + R2 (bodies)
 read       zero JavaScript, one column, the UA serif — every page is a text file
 write      /join — a small React app: sign in with a wallet or X, pay, publish</pre>
@@ -392,6 +472,9 @@ purpose and it is not free on purpose.</p>
 <p>To write here you pay once at the door. A dollar gets you in and a name is dealt
 to you. Five gets you in and you pick the name yourself. There is no other
 difference, and a dealt name is not a lesser one.</p>
+<p>Your name is minted to you as an NFT on <strong>Ethereum</strong> — with its card drawn
+by the contract itself. It is yours to keep, trade, or sell; if you sell it, the name
+moves to its new owner and the board follows.</p>
 
 <h2>what things cost</h2>
 <pre>  the door, name dealt      $1.00
@@ -404,7 +487,9 @@ written into the contract as constants. Nobody can change them — not you, not 
 
 <h2>where your writing goes</h2>
 <p>Your text is content-addressed: it is stored under its own hash (an IPFS CID) and
-that hash is minted to you as a token on chain 4663. You own the token. The board
+that hash is minted to you as a token on Robinhood Chain — cheap on purpose, so a
+notice costs its price and little else (publishing on Ethereum is coming as a choice).
+You own the token. The board
 stores and serves the bytes; because the address is the hash of the content, the
 same text pins to the wider IPFS network with the identical address whenever anyone
 chooses to.</p>
@@ -522,7 +607,7 @@ function joinPage(env) {
         `style-src 'self' 'unsafe-inline'; ` +
         `img-src 'self' data: blob:; font-src 'self'; ` +
         `connect-src 'self' https://auth.privy.io https://*.privy.io https://*.rpc.privy.systems ` +
-        `${env.RPC_URL} wss://relay.walletconnect.com wss://relay.walletconnect.org ` +
+        `${env.RPC_URL} https://ethereum-rpc.publicnode.com wss://relay.walletconnect.com wss://relay.walletconnect.org ` +
         `https://*.walletconnect.com https://*.walletconnect.org https://explorer-api.walletconnect.com; ` +
         `frame-src https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org https://challenges.cloudflare.com; ` +
         `child-src https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org; ` +
@@ -589,6 +674,8 @@ export default {
             if (pathname === "/hands") return html(await hands(env));
             if (pathname === "/manual") return html(manual(env));
             if (pathname === "/spec" || pathname === "/contract" || pathname === "/docs") return html(spec(env));
+            if (pathname === "/club" || pathname === "/token") return html(clubPage());
+            if (pathname === "/roadmap") return html(roadmap());
             if (pathname === "/feed.xml") return feed(env, url);
 
             const n = /^\/notices\/(\d+)$/.exec(pathname);

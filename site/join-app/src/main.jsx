@@ -8,7 +8,7 @@ if (typeof globalThis.Buffer === "undefined") globalThis.Buffer = Buffer;
 import React from "react";
 import {createRoot} from "react-dom/client";
 import {PrivyProvider} from "@privy-io/react-auth";
-import {rhChain} from "./chain.js";
+import {rhChain, ethChain} from "./chain.js";
 import App from "./App.jsx";
 import "./style.css";
 
@@ -31,8 +31,10 @@ function Root() {
                 // using it — no confusing second address, and their on-chain name
                 // + exemption stay attached to the wallet they actually control.
                 embeddedWallets: {ethereum: {createOnLogin: "users-without-wallets"}},
+                // Names live on Ethereum; posts settle on Robinhood. The wallet
+                // works on both — each write is routed to its chain explicitly.
                 defaultChain: rhChain,
-                supportedChains: [rhChain],
+                supportedChains: [rhChain, ethChain],
             }}
         >
             <div className="wrap">
@@ -43,8 +45,8 @@ function Root() {
                 <App />
                 <div className="b" />
                 <p className="t">
-                    Reading is free. Writing costs what the manual says, settled in ETH on chain 4663. Nobody can
-                    change those prices. <a href="/manual">manual</a>
+                    Reading is free. Your name is an NFT on Ethereum; notices settle in ETH on Robinhood Chain.
+                    Prices are what the manual says — nobody can change them. <a href="/manual">manual</a>
                 </p>
             </div>
         </PrivyProvider>
