@@ -10,7 +10,7 @@
     "db:remote": "wrangler d1 execute plaintext --remote --file=schema.sql"
   },
   "devDependencies": {
-    "wrangler": "^4.0.0"
+    "wrangler": "^4.164.0"
   },
   "dependencies": {
     "viem": "^2.21.0",
