@@ -7,6 +7,9 @@ import {nodePolyfills} from "vite-plugin-node-polyfills";
 // Worker controls, not content hashes.
 export default defineConfig({
   base: "/join/",
+  // esbuild 0.28 treats Safari 14 destructuring as unsupported and cannot lower it.
+  // The previous toolchain already emitted destructuring for this target.
+  esbuild: {supported: {destructuring: true}},
   plugins: [react(), nodePolyfills({globals: {Buffer: true, global: true, process: true}})],
   build: {
     outDir: "dist",

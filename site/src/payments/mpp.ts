@@ -111,7 +111,10 @@ function tempoRpc(env: Env): string {
 }
 /** MPPScan attribution realm — hostname only, no scheme (mppscan.com/discovery/spec). */
 export function mppRealm(env: Env): string {
-  const raw = (env.PUBLIC_API_URL || "https://plaintext.numetal.xyz").replace(/\/+$/, "");
+  let raw = env.PUBLIC_API_URL || "https://plaintext.numetal.xyz";
+  let end = raw.length;
+  while (end > 0 && raw[end - 1] === "/") end -= 1;
+  raw = raw.slice(0, end);
   try {
     return new URL(raw.includes("://") ? raw : `https://${raw}`).host;
   } catch {

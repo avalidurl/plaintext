@@ -148,8 +148,13 @@ export interface PaymentProvider {
 // Public origin for the x402 `resource` field. The x402 PaymentRequirements `resource` MUST be a full
 // URL (clients reject a bare path), so we build it from the configured public base + the SKU route.
 const DEFAULT_API_BASE = "https://plaintext.numetal.xyz";
+function stripTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === "/") end -= 1;
+  return value.slice(0, end);
+}
 function apiBase(env: Env): string {
-  return (env.PUBLIC_API_URL || DEFAULT_API_BASE).replace(/\/+$/, "");
+  return stripTrailingSlashes(env.PUBLIC_API_URL || DEFAULT_API_BASE);
 }
 // Window (s) a signed payment authorization stays valid — clients set validBefore = now + this. Required field.
 export const X402_MAX_TIMEOUT_SECONDS = 300;

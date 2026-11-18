@@ -198,8 +198,10 @@ export async function apiPaidWrite(env, request, ctx, skuId) {
         }
     } catch (err) {
         // Payment settled but the chain write failed — record it so it can be made
-        // right; never pretend it worked.
-        const fail = {ok: false, error: "paid but the on-chain write failed; contact the board with your ref", detail: String(err?.message ?? err), rail, payer: paid.payer ?? null};
+        // right; never pretend it worked. The response gets the message only, never
+        // the exception object or its stack.
+        const detail = err instanceof Error ? err.message : "on-chain write failed";
+        const fail = {ok: false, error: "paid but the on-chain write failed; contact the board with your ref", detail, rail, payer: paid.payer ?? null};
         await env.DB.prepare("UPDATE agent_payments SET result = ?2 WHERE key = ?1").bind(payKey, JSON.stringify(fail)).run();
         return json(fail, 502);
     }
